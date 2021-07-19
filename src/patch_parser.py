@@ -19,6 +19,7 @@ import re
 from absl import logging
 from message import Message
 
+
 class Comment(object):
     def __init__(self, raw_line, message: str, file: Optional[str] = None, line: Optional[int] = None) -> None:
         self.raw_line = raw_line
@@ -26,10 +27,12 @@ class Comment(object):
         self.file = file
         self.line = line
 
+
 class CoverLetter(object):
     def __init__(self, text, comments: List[Comment]) -> None:
         self.text = text
         self.comments = comments
+
 
 class Patch(object):
     def __init__(self, message_id, text, text_with_headers, set_index, comments, change_id) -> None:
@@ -41,19 +44,26 @@ class Patch(object):
         self.change_id = change_id
         self.revision_id = None
 
+
 class Patchset(object):
     def __init__(self, cover_letter, patches) -> None:
         self.cover_letter = cover_letter
         self.patches = patches
 
+
 class InputSource:
     """Tracks the line number as we iterate over lines of text."""
     _lines: List[str]
     _base_line_number: int
+    _previous_item: str
+    _number_of_edits: int
+    _deleted_lines: int
 
     def __init__(self, text: str, base_line_number=0):
         self._base_line_number = base_line_number
         self._lines = [l.strip() for l in text.split('\n')]
+        self._previous_item = ""
+        self._deleted_lines = 0
 
     def __getitem__(self, index) -> str:
         return self._lines[index]
@@ -65,20 +75,41 @@ class InputSource:
         return self._base_line_number
 
     def consume(self, n=1) -> None:
+        self._previous_item = self._lines[1]
         self._lines = self._lines[n:]
         self._base_line_number += n
 
+    def set_previous_line(self, item):
+        self._previous_item = item
+
+    def get_previous_line(self):
+        return self._previous_item
+
+    def get_number_of_deleted_lines(self):
+        return self._deleted_lines
+
+    def add_deleted_line(self):
+        self._deleted_lines = self._deleted_lines + 1
+        logging.warning('DELETED LINES ---------> ' + str(self._deleted_lines))
+
+    def reset_deleted_lines(self):
+        self._deleted_lines = 0
+
+
 class Line(object):
     """A line of text that tracks its line number."""
+
     def __init__(self, line_number: int, text: str) -> None:
         self.line_number = line_number
         self.text = text
+
 
 class QuotedLine(object):
     def __init__(self, parent_line_number: int, child_line_number: int, text: str) -> None:
         self.parent_line_number = parent_line_number
         self.child_line_number = child_line_number
         self.text = text
+
 
 class CommentLine(object):
     def __init__(self, last_parent_line_number: int, child_line_number: int, text: str) -> None:
@@ -110,6 +141,7 @@ class Trie(object):
         node = self._children[letter]
         return node.diff_best_match(string)
 
+
 class TrieNode(object):
     def __init__(self, letter: str) -> None:
         self._letter = letter
@@ -136,6 +168,7 @@ class TrieNode(object):
         node = self._children[letter]
         return node.diff_best_match(string)
 
+
 def _get_quote_prefix(parent_lines: List[Line], child_lines: List[Line]) -> str:
     trie = Trie()
     for line in parent_lines:
@@ -156,13 +189,16 @@ def _get_quote_prefix(parent_lines: List[Line], child_lines: List[Line]) -> str:
     prefix_str, count = max(prefix_count_map.items(), key=lambda x: x[1])
     return prefix_str
 
+
 NORMALIZE_WHITESPACE_MATCHER = re.compile(r'\s+')
+
 
 def _normalize_whitespace(string: str) -> str:
     return NORMALIZE_WHITESPACE_MATCHER.sub(' ', string)
 
+
 def _find_quoted_lines(parent_lines: List[Line],
-                      child_lines: List[Line]) -> Tuple[List[QuotedLine], str]:
+                       child_lines: List[Line]) -> Tuple[List[QuotedLine], str]:
     quote_prefix = _get_quote_prefix(parent_lines, child_lines)
     parent_line_set = {}
     for line in parent_lines:
@@ -176,12 +212,13 @@ def _find_quoted_lines(parent_lines: List[Line],
         if line_text in parent_line_set:
             parent_line = parent_line_set[line_text]
             quoted_lines.append(QuotedLine(
-                    text=parent_line.text,
-                    parent_line_number=parent_line.line_number,
-                    child_line_number=line.line_number))
+                text=parent_line.text,
+                parent_line_number=parent_line.line_number,
+                child_line_number=line.line_number))
         else:
             continue
     return quoted_lines, quote_prefix
+
 
 def _to_lines(text: str) -> List[Line]:
     line_list = []
@@ -189,14 +226,16 @@ def _to_lines(text: str) -> List[Line]:
         line_list.append(Line(text=line, line_number=i))
     return line_list
 
+
 def _filter_definitely_comments(child_lines: List[Line]) -> List[Line]:
     child_lines = child_lines[:]
     quote_matcher = re.compile(r'\s*>.*')
     comments = []
     for line in child_lines:
-      if quote_matcher.match(line.text):
-        comments.append(line)
+        if quote_matcher.match(line.text):
+            comments.append(line)
     return comments
+
 
 def _is_same_line(child_line: Line, quoted_line: QuotedLine, quote_prefix: str) -> bool:
     if child_line.line_number == quoted_line.child_line_number:
@@ -210,9 +249,10 @@ def _is_same_line(child_line: Line, quoted_line: QuotedLine, quote_prefix: str) 
     else:
         return False
 
+
 def _filter_non_quoted_lines(all_child_lines: List[Line],
-                            quoted_lines: List[QuotedLine],
-                            quote_prefix: str) -> List[CommentLine]:
+                             quoted_lines: List[QuotedLine],
+                             quote_prefix: str) -> List[CommentLine]:
     comment_lines = []
     quoted_lines_iter = iter(quoted_lines)
     quoted_line = next(quoted_lines_iter, None)
@@ -227,8 +267,9 @@ def _filter_non_quoted_lines(all_child_lines: List[Line],
                                              text=child_line.text))
     return comment_lines
 
+
 def _merge_comment_lines(comment_lines: List[CommentLine]) -> List[Comment]:
-    comment_map : Dict[int, List[CommentLine]] = {}
+    comment_map: Dict[int, List[CommentLine]] = {}
     comment_lines.sort(key=lambda x: x.child_line_number)
     for line in comment_lines:
         if line.last_parent_line_number not in comment_map:
@@ -240,22 +281,25 @@ def _merge_comment_lines(comment_lines: List[CommentLine]) -> List[Comment]:
         comment_list.append(Comment(raw_line=last_parent_line_number, message=message))
     return comment_list
 
+
 def _find_comments(parent_lines: List[Line], all_child_lines: List[Line]) -> List[Comment]:
     probably_not_comment_lines = _filter_definitely_comments(all_child_lines)
     quoted_lines, quote_prefix = _find_quoted_lines(parent_lines, probably_not_comment_lines)
     comment_lines = _filter_non_quoted_lines(all_child_lines, quoted_lines, quote_prefix)
     return _merge_comment_lines(comment_lines)
 
+
 def _diff_reply(parent: Message, child: Message) -> List[Comment]:
-    #TODO: _to_lines only works on str, but Message.content is also sometimes a List
+    # TODO: _to_lines only works on str, but Message.content is also sometimes a List
     parent_lines = _to_lines(parent.content)
     child_lines = _to_lines(child.content)
     return _find_comments(parent_lines, child_lines)
 
+
 def _filter_patches_and_cover_letter_replies(email_thread: Message) -> Tuple[List[Message], List[Message]]:
     patches = []
     cover_letter_replies = []
-    if (not email_thread.in_reply_to and email_thread.patch_index()[0] == 1):
+    if not email_thread.in_reply_to and email_thread.patch_index()[0] == 1:
         patches.append(email_thread)
     for message in email_thread.children:
         if message.is_patch():
@@ -264,13 +308,16 @@ def _filter_patches_and_cover_letter_replies(email_thread: Message) -> Tuple[Lis
             cover_letter_replies.append(message)
     return patches, cover_letter_replies
 
+
 def _find_patches(email_thread: Message) -> List[Message]:
     patches, _ = _filter_patches_and_cover_letter_replies(email_thread)
     return patches
 
+
 def _find_cover_letter_replies(email_thread: Message) -> List[Message]:
     _, cover_letter_replies = _filter_patches_and_cover_letter_replies(email_thread)
     return cover_letter_replies
+
 
 def parse_comments(email_thread: Message) -> Patchset:
     replies = _find_cover_letter_replies(email_thread)
@@ -292,7 +339,7 @@ def parse_comments(email_thread: Message) -> Patchset:
             assert length == len(patches)
         text = 'From: {from_}\nSubject: {subject}\n\n{content}'.format(
             from_=patch.from_, subject=patch.subject, content=patch.content)
-        patch_list.append(Patch(message_id = patch.id,
+        patch_list.append(Patch(message_id=patch.id,
                                 text=patch.content,
                                 text_with_headers=text,
                                 set_index=set_index,
@@ -315,7 +362,14 @@ class PatchFileChunkLineMap(object):
         if raw_line in self:
             return self.side, raw_line + self.offset
         else:
-            raise IndexError('Expected ' + str(self.in_range[0]) + ' <= ' + str(raw_line) + ' <= ' + str(self.in_range[1]))
+            raise IndexError(
+                'Expected ' + str(self.in_range[0]) + ' <= ' + str(raw_line) + ' <= ' + str(self.in_range[1]))
+
+    def get_range(self) -> Tuple[int, int]:
+        return self.in_range
+
+    def get_side(self) -> str:
+        return self.side
 
     def __repr__(self) -> str:
         return f'PatchFileLineMap(side={self.side}, offset={self.offset}, range={self.in_range})'
@@ -366,45 +420,71 @@ class RawLineToGerritLineMap(object):
         children = '\n'.join(textwrap.indent(repr(p), '  ') for p in self.patch_files)
         return 'RawLineToGerritLineMap(\n' + children + '\n)'
 
+
 SKIP_LINE_MATCHER = re.compile(r'^@@ -(\d+)(,\d+)? \+(\d+)(,\d+)? @@.*$')
 
 DIFF_LINE_MATCHER = re.compile(r'^diff --git a/\S+ b/(\S+)$')
 
+
 def _does_match_end_of_super_chunk(lines: InputSource) -> bool:
     line = lines[0]
     return (line == '--') or (len(lines) <= 1) or bool(SKIP_LINE_MATCHER.match(line) or DIFF_LINE_MATCHER.match(line))
+
 
 def _parse_patch_file_unchanged_chunk(
         lines: InputSource,
         gerrit_orig_line: int,
         gerrit_new_line: int) -> Tuple[int, int, PatchFileChunkLineMap]:
     in_start = lines.line_number()
-    while (not _does_match_end_of_super_chunk(lines)) and ((not lines[0]) or (lines[0] and lines[0][0] != '+' and lines[0][0] != '-')):
+    while (not _does_match_end_of_super_chunk(lines)) and (
+            (not lines[0]) or (lines[0] and lines[0][0] != '+' and lines[0][0] != '-')):
         logging.info('dropping line: %s', lines[0])
         lines.consume()
         gerrit_orig_line += 1
         gerrit_new_line += 1
+        #logging.warning('Unchanged start: ' + str(in_start))
+        #logging.warning('Unchanged line: ' + lines[0])
+        #logging.warning('Unchanged lines - 1: ' + str(lines.line_number() - 1))
+    if lines.get_number_of_deleted_lines() == 0:
+        return (gerrit_orig_line,
+            gerrit_new_line,
+            PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
+                                  side='',
+                                  offset=(gerrit_new_line - lines.line_number())))
+    else:
+        return (gerrit_orig_line,
+                gerrit_new_line,
+                PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
+                                      side='',
+                                      offset=(gerrit_new_line - lines.get_number_of_deleted_lines() - lines.line_number())))
+
+
+def _parse_patch_file_added_chunk(
+        lines: InputSource,
+        gerrit_orig_line: int,
+        gerrit_new_line: int,
+        chunks: PatchFileChunkLineMap) -> Tuple[int, int, PatchFileChunkLineMap]:
+    in_start = lines.line_number()
+    previous_number_of_removed_lines = lines.get_number_of_deleted_lines()
+    lines.reset_deleted_lines()
+    logging.info('First char - 1: %c', lines[0][0])
+    while lines[0] and lines[0][0] == '+':
+        previous = lines.get_previous_line()
+        lines.consume()
+        gerrit_orig_line += 1
+        gerrit_new_line += 1
+        if previous[0] == '-': # maybe add check to see if it is actually a modified one though I think this situation only applies when it actually is modified
+            return (gerrit_orig_line,
+                    gerrit_new_line,
+                    PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
+                                          side='',
+                                          offset=(gerrit_new_line - lines.line_number() - 1)))
     return (gerrit_orig_line,
             gerrit_new_line,
             PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
                                   side='',
                                   offset=(gerrit_new_line - lines.line_number())))
 
-def _parse_patch_file_added_chunk(
-        lines: InputSource,
-        gerrit_orig_line: int,
-        gerrit_new_line: int) -> Tuple[int, int, PatchFileChunkLineMap]:
-    in_start = lines.line_number()
-    logging.info('First char - 1: %c', lines[0][0])
-    while lines[0] and lines[0][0] == '+':
-        lines.consume()
-        gerrit_orig_line += 1
-        gerrit_new_line += 1
-    return (gerrit_orig_line,
-            gerrit_new_line,
-            PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
-                                  side='',
-                                  offset=(gerrit_new_line - lines.line_number())))
 
 def _parse_patch_file_removed_chunk(
         lines: InputSource,
@@ -412,6 +492,7 @@ def _parse_patch_file_removed_chunk(
         gerrit_new_line: int) -> Tuple[int, int, PatchFileChunkLineMap]:
     in_start = lines.line_number()
     while lines[0] and lines[0][0] == '-':
+        lines.add_deleted_line()
         lines.consume()
         gerrit_orig_line += 1
         gerrit_new_line += 1
@@ -421,20 +502,23 @@ def _parse_patch_file_removed_chunk(
                                   side='b',
                                   offset=(gerrit_new_line - lines.line_number())))
 
+
 def _parse_patch_file_chunk(lines: InputSource,
                             gerrit_orig_line: int,
-                            gerrit_new_line: int) -> Tuple[int, int, PatchFileChunkLineMap]:
+                            gerrit_new_line: int, chunks: PatchFileChunkLineMap) -> Tuple[int, int, PatchFileChunkLineMap]:
     line = lines[0]
     start_line_len = len(lines)
     if _does_match_end_of_super_chunk(lines):
         raise ValueError('Unexpected line: ' + line)
     elif line and line[0] == '+':
+        logging.warning('ADD')
         logging.info('First char - 0: %c', line[0])
-        ret_val =  _parse_patch_file_added_chunk(lines, gerrit_orig_line, gerrit_new_line)
+        ret_val = _parse_patch_file_added_chunk(lines, gerrit_orig_line, gerrit_new_line, chunks)
         if start_line_len == len(lines):
             raise ValueError('Could not parse add line: ' + line)
         return ret_val
     elif line and line[0] == '-':
+        logging.warning('REMOVE')
         ret_val = _parse_patch_file_removed_chunk(lines, gerrit_orig_line, gerrit_new_line)
         if start_line_len == len(lines):
             raise ValueError('Could not parse remove line: ' + line)
@@ -444,6 +528,7 @@ def _parse_patch_file_chunk(lines: InputSource,
         if start_line_len == len(lines):
             raise ValueError('Could not parse unchanged line: ' + line)
         return ret_val
+
 
 def _parse_patch_file_super_chunk(lines: InputSource) -> List[PatchFileChunkLineMap]:
     match = SKIP_LINE_MATCHER.match(lines[0])
@@ -461,9 +546,10 @@ def _parse_patch_file_super_chunk(lines: InputSource) -> List[PatchFileChunkLine
          gerrit_new_line,
          chunk) = _parse_patch_file_chunk(lines,
                                           gerrit_orig_line,
-                                          gerrit_new_line)
+                                          gerrit_new_line, chunks)
         chunks.append(chunk)
     return chunks
+
 
 def _parse_patch_file_entry(lines: InputSource) -> Optional[PatchFileLineMap]:
     match = DIFF_LINE_MATCHER.match(lines[0])
@@ -506,6 +592,7 @@ def _parse_patch_file_entry(lines: InputSource) -> Optional[PatchFileLineMap]:
         raise ValueError('Expected chunks in file, but found: ' + lines[0])
     return PatchFileLineMap(name=file_name, chunks=chunks)
 
+
 def _find_diff_start(lines: InputSource) -> None:
     """Finds the start of the actual diff, after the commit message and the diffstat."""
     # Ignore everything before last '---'.
@@ -537,6 +624,7 @@ def _find_diff_start(lines: InputSource) -> None:
     if not DIFF_LINE_MATCHER.match(lines[0]):
         raise ValueError('failed to find file diff, instead found: ' + lines[0])
 
+
 def _parse_git_patch(raw_patch: str) -> RawLineToGerritLineMap:
     lines = InputSource(raw_patch)
     _find_diff_start(lines)
@@ -553,12 +641,14 @@ def _parse_git_patch(raw_patch: str) -> RawLineToGerritLineMap:
     else:
         raise ValueError('Unknown error')
 
+
 def _map_patch_to_gerrit_change(patch: Patch) -> None:
     logging.info('Patch: %s', patch.text)
     raw_line_to_gerrit_map = _parse_git_patch(patch.text)
     for comment in patch.comments:
         logging.info('raw_line: %d, messages: %s', comment.raw_line, comment.message)
         comment.file, comment.line = raw_line_to_gerrit_map.map(comment.raw_line)
+
 
 def map_comments_to_gerrit(patchset: Patchset):
     for patch in patchset.patches:
