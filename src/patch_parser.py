@@ -442,21 +442,22 @@ def _parse_patch_file_unchanged_chunk(
         lines.consume()
         gerrit_orig_line += 1
         gerrit_new_line += 1
-        #logging.warning('Unchanged start: ' + str(in_start))
-        #logging.warning('Unchanged line: ' + lines[0])
-        #logging.warning('Unchanged lines - 1: ' + str(lines.line_number() - 1))
+        # logging.warning('Unchanged start: ' + str(in_start))
+        # logging.warning('Unchanged line: ' + lines[0])
+        # logging.warning('Unchanged lines - 1: ' + str(lines.line_number() - 1))
     if lines.get_number_of_deleted_lines() == 0:
         return (gerrit_orig_line,
-            gerrit_new_line,
-            PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
-                                  side='',
-                                  offset=(gerrit_new_line - lines.line_number())))
+                gerrit_new_line,
+                PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
+                                      side='',
+                                      offset=(gerrit_new_line - lines.line_number())))
     else:
         return (gerrit_orig_line,
                 gerrit_new_line,
                 PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
                                       side='',
-                                      offset=(gerrit_new_line - lines.get_number_of_deleted_lines() - lines.line_number())))
+                                      offset=(
+                                                  gerrit_new_line - lines.get_number_of_deleted_lines() - lines.line_number())))
 
 
 def _parse_patch_file_added_chunk(
@@ -473,7 +474,8 @@ def _parse_patch_file_added_chunk(
         lines.consume()
         gerrit_orig_line += 1
         gerrit_new_line += 1
-        if previous[0] == '-': # maybe add check to see if it is actually a modified one though I think this situation only applies when it actually is modified
+        if previous[
+            0] == '-':  # maybe add check to see if it is actually a modified one though I think this situation only applies when it actually is modified
             return (gerrit_orig_line,
                     gerrit_new_line,
                     PatchFileChunkLineMap(in_range=(in_start, lines.line_number() - 1),
@@ -505,7 +507,8 @@ def _parse_patch_file_removed_chunk(
 
 def _parse_patch_file_chunk(lines: InputSource,
                             gerrit_orig_line: int,
-                            gerrit_new_line: int, chunks: PatchFileChunkLineMap) -> Tuple[int, int, PatchFileChunkLineMap]:
+                            gerrit_new_line: int, chunks: PatchFileChunkLineMap) -> Tuple[
+    int, int, PatchFileChunkLineMap]:
     line = lines[0]
     start_line_len = len(lines)
     if _does_match_end_of_super_chunk(lines):
