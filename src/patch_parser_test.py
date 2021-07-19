@@ -136,8 +136,6 @@ class PatchParserTest(unittest.TestCase):
         self.assertEqual(line_map.map(11), ('file', 2), msg=repr(line_map))  # line 2, control assert
         self.assertEqual(line_map.map(13), ('fileb', 4), msg=repr(line_map))  # line 4 (deleted but shows in b file)
 
-
-
     def test_many_deleted_lines(self):
         raw_patch = '''
                     Commit message goes here.
@@ -176,8 +174,6 @@ class PatchParserTest(unittest.TestCase):
         self.assertEqual(line_map.map(19), ('file', 6), msg=repr(line_map))  # an issue with the numbering.
 
         # self.assertEqual(line_map.map(15), ('fileb', 6), msg=repr(line_map))  # line 4 (deleted but shows in b file)
-
-
 
     def test_only_new_lines_patch(self):
         raw_patch = '''
@@ -244,7 +240,6 @@ base-commit: 235360eb7cd778d7264c5e57358a3d144936b862
 
         # print(line_map.map(15))
 
-
         # Line 8 is right before the start of the diff
         self.assertEqual(line_map.map(10), ('', -1), msg=repr(line_map))
         self.assertEqual(line_map.map(11), ('file', 2), msg=repr(line_map))
@@ -257,7 +252,6 @@ base-commit: 235360eb7cd778d7264c5e57358a3d144936b862
         # self.assertEqual(line_map.map(19), ('file', 9), msg=repr(line_map))
 
     # TODO(willliu@google.com): Add tests for Multiple patches, no cover letter
-
 
     def test_parse_with_multiple_modified_lines(self):
         raw_patch = '''
@@ -305,24 +299,22 @@ base-commit: 235360eb7cd778d7264c5e57358a3d144936b862
         self.assertEqual(line_map.map(18), ('fileb', 9), msg=repr(line_map))
 
         # ADDITIONS
-        #self.assertEqual(line_map.map(19), ('file', 5), msg=repr(line_map))
-        #self.assertEqual(line_map.map(17), ('file', 8), msg=repr(line_map))
-        #self.assertEqual(line_map.map(18), ('file', 9), msg=repr(line_map))
+        # self.assertEqual(line_map.map(19), ('file', 5), msg=repr(line_map))
+        # self.assertEqual(line_map.map(17), ('file', 8), msg=repr(line_map))
+        # self.assertEqual(line_map.map(18), ('file', 9), msg=repr(line_map))
 
         # UNMODIFIED BOTTOM PART
         self.assertEqual(line_map.map(24), ('file', 10), msg=repr(line_map))
-        #self.assertEqual(line_map.map(25), ('file', 11), msg=repr(line_map))
-        #self.assertEqual(line_map.map(26), ('file', 12), msg=repr(line_map))
+        # self.assertEqual(line_map.map(25), ('file', 11), msg=repr(line_map))
+        # self.assertEqual(line_map.map(26), ('file', 12), msg=repr(line_map))
 
-
-        #self.assertEqual(line_map.map(21), ('file', 7), msg=repr(line_map))
-        #self.assertEqual(line_map.map(23), ('file', 9), msg=repr(line_map))
-        #self.assertEqual(line_map.map(12), ('file', 12), msg=repr(line_map))
-        #self.assertEqual(line_map.map(18), ('fileb', 5), msg=repr(line_map))
+        # self.assertEqual(line_map.map(21), ('file', 7), msg=repr(line_map))
+        # self.assertEqual(line_map.map(23), ('file', 9), msg=repr(line_map))
+        # self.assertEqual(line_map.map(12), ('file', 12), msg=repr(line_map))
+        # self.assertEqual(line_map.map(18), ('fileb', 5), msg=repr(line_map))
         # self.assertEqual(line_map.map(12), ('file', 3), msg=repr(line_map))
         # self.assertEqual(line_map.map(13), ('file', 4), msg=repr(line_map))
         # self.assertEqual(line_map.map(14), ('fileb', 5), msg=repr(line_map))
-
 
 
 if __name__ == '__main__':
